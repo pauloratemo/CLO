@@ -1,0 +1,51 @@
+# Addresses basic CLO structure ONLY! Monte Carlo simulation, credit modeling not included!
+
+# Load required libraries
+library(dplyr)
+
+# Sample loan data
+loan_data <- data.frame(
+  Loan_ID = c(1, 2, 3, 4, 5),
+  Principal = c(1000000, 800000, 1200000, 700000, 900000),
+  Interest_Rate = c(0.08, 0.09, 0.07, 0.085, 0.075),
+  Credit_Rating = c('AAA', 'AA', 'AAA', 'A', 'BBB')
+)
+
+# CLO parameters
+tranche_rates <- c('AAA' = 0.05, 'AA' = 0.07, 'A' = 0.1, 'BBB' = 0.15)
+tranche_sizes <- c('AAA' = 0.6, 'AA' = 0.2, 'A' = 0.15, 'BBB' = 0.05)
+recovery_rates <- c('AAA' = 0.6, 'AA' = 0.5, 'A' = 0.4, 'BBB' = 0.3)
+discount_rate <- 0.08
+
+# Calculate cash flows for each loan
+loan_data <- loan_data %>%
+  mutate(
+    Interest_Payment = Principal * Interest_Rate,
+    Principal_Payment = Principal * (1 - Interest_Rate),
+    Default_Probability = runif(n())
+  )
+
+# Function to calculate expected cash flows for each tranche
+calculate_cash_flows <- function(loan_data, tranche, tranche_size, tranche_rate, recovery_rate) {
+  loan_data$Expected_Recovery <- loan_data$Principal * loan_data$Default_Probability * recovery_rate
+  loan_data$Expected_Loss <- loan_data$Principal * loan_data$Default_Probability * (1 - recovery_rate)
+  loan_data$CF <- ifelse(loan_data$Credit_Rating == tranche,
+                         loan_data$Interest_Payment + loan_data$Principal_Payment - loan_data$Expected_Loss,
+                         0)
+  loan_data$Discounted_CF <- loan_data$CF / (1 + discount_rate)
+  loan_data$Total_CF <- cumsum(loan_data$Discounted_CF)
+  loan_data$Tranche_CF <- ifelse(loan_data$Total_CF <= tranche_size * sum(loan_data$Principal),
+                                  loan_data$Discounted_CF,
+                                  loan_data$Discounted_CF - (loan_data$Total_CF - tranche_size * sum(loan_data$Principal)))
+  sum(loan_data$Tranche_CF)
+}
+
+# Calculate present value of each tranche's cash flows
+valuation_results <- sapply(names(tranche_sizes), function(tranche) {
+  calculate_cash_flows(loan_data, tranche, tranche_sizes[tranche], tranche_rates[tranche], recovery_rates[tranche])
+})
+
+# Print results
+for (i in seq_along(valuation_results)) {
+  cat(sprintf("Value of %s tranche: $%.2f\n", names(valuation_results)[i], valuation_results[i]))
+}

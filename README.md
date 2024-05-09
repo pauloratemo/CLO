@@ -1,0 +1,1 @@
+This R code calculates cash flows for each loan in each tranche; determines the present value of each tranche's cash flows using provided CLO parameters; and prints the valuation results for each tranche.
